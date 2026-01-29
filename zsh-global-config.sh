@@ -49,15 +49,12 @@ pause 1
 # --------------------------------------------------
 if [ "$PM" = "unknown" ]; then
   echo ""
-  echo "⚠️  Unsupported or unknown Linux distribution."
+  echo "⚠️  Unsupported Linux distribution."
   echo ""
-  echo "Supported:"
-  echo "  • Ubuntu / Debian (apt)"
-  echo "  • Fedora / RHEL (dnf)"
-  echo "  • Arch / Manjaro (pacman)"
-  echo ""
-  echo "Please install manually:"
-  echo "  zsh git curl"
+  echo "Please install the following packages manually:"
+  echo "  - zsh"
+  echo "  - git"
+  echo "  - curl"
   echo ""
   echo "Then re-run this script."
   echo ""
@@ -69,11 +66,6 @@ fi
 # ==================================================
 if [ "$MODE" = "install" ]; then
 
- 
-
-  # ----------------------------------------------
-  # Install base packages
-  # ----------------------------------------------
   echo "📦 Installing base packages"
   pause 1
 
@@ -87,40 +79,22 @@ if [ "$MODE" = "install" ]; then
     sudo pacman -Sy --noconfirm zsh git curl
   fi
 
-  # ----------------------------------------------
-  # Verify zsh
-  # ----------------------------------------------
   if ! command -v zsh >/dev/null 2>&1; then
-    echo ""
     echo "❌ zsh installation failed."
-    echo "Please install zsh manually and re-run."
-    echo ""
     exit 1
   fi
 
   echo "✅ zsh installed at $(which zsh)"
   pause 1
 
-  # ----------------------------------------------
-  # Install Oh My Zsh (NO shell switching)
-  # ----------------------------------------------
+  # Oh My Zsh (no shell switching)
   if [ ! -d "$HOME/.oh-my-zsh" ]; then
     echo "✨ Installing Oh My Zsh"
-    pause 1
     RUNZSH=no CHSH=no \
       sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-  else
-    echo "✔ Oh My Zsh already installed"
   fi
 
-  pause 1
-
-  # ----------------------------------------------
-  # Install plugins
-  # ----------------------------------------------
-  echo "🔌 Installing zsh plugins"
-  pause 1
-
+  # Plugins
   ZSH_CUSTOM=${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}
 
   [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ] && \
@@ -131,99 +105,76 @@ if [ "$MODE" = "install" ]; then
     git clone https://github.com/zsh-users/zsh-syntax-highlighting \
     "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
 
-  # ----------------------------------------------
-  # Clean old custom block
-  # ----------------------------------------------
+  # Clean old config block
   sed -i '/# >>> ZSH_CUSTOM_START >>>/,/# <<< ZSH_CUSTOM_END <<</d' ~/.zshrc 2>/dev/null || true
 
-  # ----------------------------------------------
-  # Write zsh configuration
-  # ----------------------------------------------
-  echo "📝 Writing zsh configuration"
-  pause 1
-
+  # Write config
   cat << 'EOF' >> ~/.zshrc
 
 # >>> ZSH_CUSTOM_START >>>
 
-# ---- History ----
 HISTFILE=~/.zsh_history
 HISTSIZE=10000
 SAVEHIST=10000
-setopt APPEND_HISTORY
-setopt SHARE_HISTORY
-setopt HIST_IGNORE_ALL_DUPS
-setopt HIST_REDUCE_BLANKS
+setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_ALL_DUPS HIST_REDUCE_BLANKS
 
-# ---- Autosuggestions ----
 ZSH_AUTOSUGGEST_STRATEGY=(history)
 
-# ---- Prompt (user@host + last 3 dirs) ----
 PROMPT='%F{green}%n@%m%f %F{cyan}%3~%f
 ➜ '
 
-# ---- Blank line between commands ----
-precmd() {
-  print ""
-}
+precmd() { print ""; }
 
 # <<< ZSH_CUSTOM_END <<<
 EOF
 
-  # Enable plugins
   sed -i 's/^plugins=.*/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' ~/.zshrc
 
-  # ----------------------------------------------
-  # Final INSTALL message
-  # ----------------------------------------------
   echo ""
   echo "✅ Zsh setup complete."
-  pause 1
   echo ""
   echo "🔧 To make zsh your default shell:"
   echo ""
-  echo "   👉 Replace <username> with your Linux username"
+  echo "   chsh -s $(which zsh) <username>"
   echo ""
-  echo "       chsh -s $(which zsh) <username>"
+  echo "💡 Example:"
+  echo "   chsh -s $(which zsh) $USER"
   echo ""
-  pause 2
-  echo "   💡 Example for you:"
-  echo ""
-  echo "       chsh -s $(which zsh) $USER"
-  echo ""
-  pause 2
-  echo "➡️  Then logout and login again."
+  echo "➡️  Logout and login again to start using zsh."
   echo ""
   echo "ℹ️  This step is manual to avoid PAM / SSH issues."
   pause 2
-
   exit 0
 fi
 
 # ==================================================
-# UNINSTALL MODE
+# UNINSTALL MODE (LOCKOUT-SAFE)
 # ==================================================
 if [ "$MODE" = "uninstall" ]; then
-  echo "🧹 Starting zsh uninstall"
-  pause 2
 
-  # Remove Oh My Zsh
-  if [ -d "$HOME/.oh-my-zsh" ]; then
-    echo "🗑️  Removing Oh My Zsh"
-    rm -rf "$HOME/.oh-my-zsh"
-  else
-    echo "ℹ️  Oh My Zsh not found (skipping)"
+  LOGIN_SHELL="$(getent passwd "$USER" | cut -d: -f7 || true)"
+  ZSH_PATH="$(command -v zsh 2>/dev/null || true)"
+
+  if [ "$SHELL" = "$ZSH_PATH" ] || [ "$LOGIN_SHELL" = "$ZSH_PATH" ]; then
+    echo ""
+    echo "❌ SAFETY STOP: zsh is still your active login shell."
+    echo ""
+    echo "To avoid being locked out of your system:"
+    echo ""
+    echo "  1️⃣ Run: bash"
+    echo "  2️⃣ Run: chsh -s /bin/bash $USER"
+    echo "  3️⃣ Logout and login again"
+    echo "  4️⃣ Re-run this uninstall command"
+    echo ""
+    exit 1
   fi
 
+  echo "🧹 Safe uninstall confirmed"
   pause 1
 
-  # Remove zsh config files
-  echo "🗑️  Removing zsh config files"
+  rm -rf ~/.oh-my-zsh
   rm -f ~/.zshrc ~/.zprofile ~/.zshenv ~/.zlogin
 
-  pause 1
-
-  # Remove zsh package (optional but included)
   if command -v zsh >/dev/null 2>&1; then
     echo "📦 Removing zsh package"
     if [ "$PM" = "apt" ]; then
@@ -233,25 +184,22 @@ if [ "$MODE" = "uninstall" ]; then
     elif [ "$PM" = "pacman" ]; then
       sudo pacman -Rns --noconfirm zsh
     fi
-  else
-    echo "ℹ️  zsh not installed (skipping)"
   fi
 
-  pause 2
-
-  # ----------------------------------------------
-  # Final UNINSTALL message
-  # ----------------------------------------------
   echo ""
-  echo "✅ Zsh uninstall complete."
+  echo "✅ Zsh has been completely uninstalled."
   echo ""
-  echo "➡️  Your system is now using bash (or your previous shell)."
+  echo "🔄 IMPORTANT NEXT STEP:"
+  echo "➡️  Please LOG OUT and LOG IN again."
   echo ""
-  echo "ℹ️  If you were previously using zsh:"
-  echo "    - Logout and login again"
-  echo "    - Or start bash manually with: bash"
+  echo "Why this is required:"
+  echo "  • Your login shell settings are applied only at login time"
+  echo "  • Logging out ensures bash is used cleanly"
   echo ""
-  pause 2
-
+  echo "After logging in again:"
+  echo "  • You will be in bash"
+  echo "  • Your system will be fully stable"
+  echo ""
+  pause 3
   exit 0
 fi
