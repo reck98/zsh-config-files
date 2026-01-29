@@ -1,78 +1,118 @@
 #!/usr/bin/env bash
 set -e
 
-MODE=${1:-install}
-echo "🔧 Mode: $MODE"
+echo "🚀 Starting global zsh setup"
 
-# ------------------------------
+# --------------------------------------------------
 # Detect package manager
-# ------------------------------
+# --------------------------------------------------
+PM="unknown"
+
 if command -v apt >/dev/null 2>&1; then
   PM="apt"
 elif command -v dnf >/dev/null 2>&1; then
   PM="dnf"
 elif command -v pacman >/dev/null 2>&1; then
   PM="pacman"
-else
-  echo "❌ Unsupported package manager"
+fi
+
+echo "📦 Package manager detected: $PM"
+
+# --------------------------------------------------
+# Handle unsupported package managers
+# --------------------------------------------------
+if [ "$PM" = "unknown" ]; then
+  echo ""
+  echo "⚠️  Unsupported or unknown Linux distribution."
+  echo ""
+  echo "This script supports:"
+  echo "  - Ubuntu / Debian (apt)"
+  echo "  - Fedora / RHEL (dnf)"
+  echo "  - Arch / Manjaro (pacman)"
+  echo ""
+  echo "Please install the following packages manually:"
+  echo ""
+  echo "  zsh"
+  echo "  git"
+  echo "  curl"
+  echo ""
+  echo "Then re-run this script."
+  echo ""
   exit 1
 fi
 
-# ------------------------------
-# INSTALL MODE
-# ------------------------------
-if [ "$MODE" = "install" ]; then
-  echo "📦 Installing base packages..."
+# --------------------------------------------------
+# Disable needrestart prompts (Ubuntu / Debian only)
+# --------------------------------------------------
+if [ "$PM" = "apt" ]; then
+  echo "🔕 Disabling needrestart interactive prompts"
+  sudo mkdir -p /etc/needrestart
+  sudo tee /etc/needrestart/needrestart.conf >/dev/null << 'EOF'
+$nrconf{restart} = 'a';
+EOF
+fi
 
-  if [ "$PM" = "apt" ]; then
-    sudo apt update
-    sudo apt install -y zsh git curl
-  elif [ "$PM" = "dnf" ]; then
-    sudo dnf makecache
-    sudo dnf install -y zsh git curl util-linux-user
-  elif [ "$PM" = "pacman" ]; then
-    sudo pacman -Sy --noconfirm zsh git curl
-  fi
+# --------------------------------------------------
+# Install base packages
+# --------------------------------------------------
+echo "📦 Installing base packages..."
 
-  # Verify zsh exists
-  if ! command -v zsh >/dev/null 2>&1; then
-    echo "❌ zsh installation failed"
-    exit 1
-  fi
+if [ "$PM" = "apt" ]; then
+  sudo apt update
+  sudo apt install -y zsh git curl
+elif [ "$PM" = "dnf" ]; then
+  sudo dnf makecache
+  sudo dnf install -y zsh git curl util-linux-user
+elif [ "$PM" = "pacman" ]; then
+  sudo pacman -Sy --noconfirm zsh git curl
+fi
 
-  echo "✔ zsh found at $(which zsh)"
+# --------------------------------------------------
+# Verify zsh installation
+# --------------------------------------------------
+if ! command -v zsh >/dev/null 2>&1; then
+  echo ""
+  echo "❌ zsh installation failed or zsh not in PATH."
+  echo "Please install zsh manually and re-run the script."
+  echo ""
+  exit 1
+fi
 
-  # ------------------------------
-  # Install Oh My Zsh safely
-  # ------------------------------
-  if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    echo "✨ Installing Oh My Zsh..."
-    RUNZSH=no CHSH=no \
-      sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-  fi
+echo "✅ zsh installed at $(which zsh)"
 
-  # ------------------------------
-  # Install plugins
-  # ------------------------------
-  ZSH_CUSTOM=${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}
+# --------------------------------------------------
+# Install Oh My Zsh (NO shell switching)
+# --------------------------------------------------
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+  echo "✨ Installing Oh My Zsh"
+  RUNZSH=no CHSH=no \
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+else
+  echo "✔ Oh My Zsh already installed"
+fi
 
-  [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ] && \
-    git clone https://github.com/zsh-users/zsh-autosuggestions \
-    "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
+# --------------------------------------------------
+# Install plugins safely
+# --------------------------------------------------
+ZSH_CUSTOM=${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}
 
-  [ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" ] && \
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting \
-    "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
+[ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ] && \
+  git clone https://github.com/zsh-users/zsh-autosuggestions \
+  "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
 
-  # ------------------------------
-  # Clean old config block
-  # ------------------------------
-  sed -i '/# >>> ZSH_CUSTOM_START >>>/,/# <<< ZSH_CUSTOM_END <<</d' ~/.zshrc 2>/dev/null || true
+[ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" ] && \
+  git clone https://github.com/zsh-users/zsh-syntax-highlighting \
+  "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
 
-  # ------------------------------
-  # Write config
-  # ------------------------------
-  cat << 'EOF' >> ~/.zshrc
+# --------------------------------------------------
+# Clean old custom block
+# --------------------------------------------------
+sed -i '/# >>> ZSH_CUSTOM_START >>>/,/# <<< ZSH_CUSTOM_END <<</d' ~/.zshrc 2>/dev/null || true
+
+# --------------------------------------------------
+# Write final zsh config
+# --------------------------------------------------
+cat << 'EOF' >> ~/.zshrc
 
 # >>> ZSH_CUSTOM_START >>>
 
@@ -88,11 +128,11 @@ setopt HIST_REDUCE_BLANKS
 # ---- Autosuggestions ----
 ZSH_AUTOSUGGEST_STRATEGY=(history)
 
-# ---- Prompt ----
+# ---- Prompt (user@host + last 3 dirs) ----
 PROMPT='%F{green}%n@%m%f %F{cyan}%3~%f
 ➜ '
 
-# ---- Blank line spacing ----
+# ---- Blank line between commands ----
 precmd() {
   print ""
 }
@@ -100,47 +140,21 @@ precmd() {
 # <<< ZSH_CUSTOM_END <<<
 EOF
 
-  # Enable plugins
-  sed -i 's/^plugins=.*/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' ~/.zshrc
+# --------------------------------------------------
+# Enable plugins
+# --------------------------------------------------
+sed -i 's/^plugins=.*/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' ~/.zshrc
 
-  # ------------------------------
-  # Switch shell LAST
-  # ------------------------------
-  if [ "$SHELL" != "$(which zsh)" ]; then
-    echo "🔁 Setting zsh as default shell"
-    chsh -s "$(which zsh)"
-  fi
-
-  echo "✅ Zsh installation complete."
-  echo "➡️  Logout & open a new terminal."
-  exit 0
-fi
-
-# ------------------------------
-# UNINSTALL MODE
-# ------------------------------
-if [ "$MODE" = "uninstall" ]; then
-  echo "🧼 Reverting to bash..."
-
-  command -v bash >/dev/null 2>&1 && chsh -s "$(which bash)" || true
-
-  rm -rf ~/.oh-my-zsh
-  rm -f ~/.zshrc ~/.zprofile ~/.zshenv ~/.zlogin
-
-  if command -v zsh >/dev/null 2>&1; then
-    if [ "$PM" = "apt" ]; then
-      sudo apt remove --purge -y zsh
-    elif [ "$PM" = "dnf" ]; then
-      sudo dnf remove -y zsh
-    elif [ "$PM" = "pacman" ]; then
-      sudo pacman -Rns --noconfirm zsh
-    fi
-  fi
-
-  echo "✅ Zsh removed. Logout & reopen terminal."
-  exit 0
-fi
-
-echo "❌ Unknown mode: $MODE"
-echo "Usage: bash zsh-global-config.sh install | uninstall"
-exit 1
+# --------------------------------------------------
+# Final instructions (manual by design)
+# --------------------------------------------------
+echo ""
+echo "✅ Zsh setup complete."
+echo ""
+echo "🔧 To make zsh your default shell, run manually:"
+echo ""
+echo "    chsh -s $(which zsh)"
+echo ""
+echo "➡️  Then logout and login again."
+echo ""
+echo "ℹ️  Shell switching is manual to avoid PAM / SSH issues."
