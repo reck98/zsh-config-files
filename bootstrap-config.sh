@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-set -o pipefail
+
 
 # ==============================================================================
 # VM BOOTSTRAP SCRIPT (FINAL VERIFIED VERSION)
